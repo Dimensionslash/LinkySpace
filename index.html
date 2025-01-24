@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Homepage</title>
+    <title>LinkySpace</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,6 +15,17 @@
     </div>
 
     <button class="add-bookmark" id="addBookmark">+</button>
+    <button class="imp-exp" id="importExport">]|[</button>
+    <button class="home-icon" id="homeIcon" onclick="toggleHomeOptions()"><</button>
+    <span id="currentHomeName">home1</span>
+
+    <!-- Home Management Options -->
+    <div class="home-options" id="homeOptions" style="display: none;">
+        <button onclick="addHome()">Add Home</button>
+        <button onclick="deleteHome()">Delete Home</button>
+        <button onclick="renameHome()">Rename Home</button>
+        <div id="userHomes"></div>
+    </div>
 
     <!-- Add Bookmark Modal -->
     <div class="modal" id="addBookmarkModal">
@@ -28,12 +40,32 @@
         </div>
     </div>
 
+    <!-- Import/Export Modal -->
+    <div class="modal" id="importExportModal">
+        <div class="modal-content">
+            <h2>Import/Export Bookmarks</h2>
+            <input type="file" id="importFile">
+            <div class="modal-buttons">
+                <button class="cancel" onclick="closeImportExportModal()">Cancel</button>
+                <button class="save" onclick="exportBookmarks()">Export</button>
+                <button class="save" onclick="importBookmarks()">Import</button>
+            </div>
+            <div>
+                <input type="radio" id="add" name="importOption" value="add" checked>
+                <label for="add">Add to existing bookmarks</label><br>
+                <input type="radio" id="replace" name="importOption" value="replace">
+                <label for="replace">Replace existing bookmarks</label>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let currentHome = '';
         let bookmarks = loadBookmarks();
 
         function loadBookmarks() {
             try {
-                const data = localStorage.getItem('bookmarks');
+                const data = localStorage.getItem('bookmarks-' + currentHome);
                 return data ? JSON.parse(data) : [];
             } catch (error) {
                 console.error('Error loading bookmarks:', error);
@@ -43,7 +75,7 @@
 
         function saveBookmarks(bookmarks) {
             try {
-                localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+                localStorage.setItem('bookmarks-' + currentHome, JSON.stringify(bookmarks));
             } catch (error) {
                 console.error('Error saving bookmarks:', error);
             }
@@ -52,7 +84,7 @@
         function renderBookmarks() {
             const grid = document.getElementById('bookmarksGrid');
             grid.innerHTML = '';
-            
+
             bookmarks.forEach((bookmark, index) => {
                 const card = document.createElement('div');
                 card.className = 'bookmark-card';
@@ -63,7 +95,7 @@
                 `;
                 card.onmouseup = (e) => {
                     if (e.target.classList.contains('delete-button')) return;
-                    
+
                     if (e.button === 1) {
                         window.open(bookmark.url, '_blank');
                     } else if (e.button === 0) {
@@ -113,10 +145,171 @@
             renderBookmarks();
         }
 
+        function exportBookmarks() {
+            const homesData = {
+                currentHome: currentHome,
+                bookmarksData: {}
+            };
+
+            for (let key in localStorage) {
+                if (key.startsWith('bookmarks-')) {
+                    homesData.bookmarksData[key] = JSON.parse(localStorage.getItem(key));
+                }
+            }
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(homesData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "bookmarks.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function showImportExportModal() {
+            document.getElementById('importExportModal').style.display = 'flex';
+        }
+
+        function closeImportExportModal() {
+            document.getElementById('importExportModal').style.display = 'none';
+            document.getElementById('importFile').value = '';
+        }
+
+        function importBookmarks() {
+            const fileInput = document.getElementById('importFile');
+            const importOption = document.querySelector('input[name="importOption"]:checked').value;
+
+            if (fileInput.files.length === 0) {
+                alert('Please select a file to import');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    const importedBookmarksData = importedData.bookmarksData;
+
+                    if (importOption === 'replace') {
+                        localStorage.clear();
+                    }
+
+                    for (let key in importedBookmarksData) {
+                        if (importOption === 'replace' || !localStorage.getItem(key)) {
+                            localStorage.setItem(key, JSON.stringify(importedBookmarksData[key]));
+                        } else {
+                            let existingBookmarks = JSON.parse(localStorage.getItem(key));
+                            let newBookmarks = importedBookmarksData[key];
+
+                            let existingUrls = existingBookmarks.map(b => b.url);
+                            newBookmarks.forEach(bookmark => {
+                                if (!existingUrls.includes(bookmark.url)) {
+                                    existingBookmarks.push(bookmark);
+                                }
+                            });
+
+                            localStorage.setItem(key, JSON.stringify(existingBookmarks));
+                        }
+                    }
+
+                    currentHome = importedData.currentHome || 'home1';
+                    bookmarks = loadBookmarks();
+                    renderBookmarks();
+                    closeImportExportModal();
+                } catch (error) {
+                    alert('Error importing bookmarks: ' + error.message);
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        function toggleHomeOptions() {
+            const homeOptions = document.getElementById('homeOptions');
+            homeOptions.style.display = homeOptions.style.display === 'none' ? 'block' : 'none';
+            displayUserHomes();
+        }
+
+        function addHome() {
+            const newHome = prompt('Enter name for new home:');
+            if (newHome) {
+                saveBookmarks(bookmarks);
+
+                currentHome = newHome.replace(/\s+/g, '_').toLowerCase();
+                bookmarks = [];
+                saveBookmarks(bookmarks);
+                renderBookmarks();
+                updateCurrentHomeName();
+            }
+        }
+
+        function deleteHome() {
+            if (currentHome === 'home1') {
+                alert('Default home cannot be deleted.');
+                return;
+            }
+
+            if (confirm('Are you sure you want to delete the current home and all its bookmarks?')) {
+                localStorage.removeItem('bookmarks-' + currentHome);
+                currentHome = 'home1';
+                bookmarks = loadBookmarks();
+                renderBookmarks();
+                updateCurrentHomeName();
+            }
+        }
+
+        function renameHome() {
+            if (currentHome === 'home1') {
+                alert('Default home cannot be renamed.');
+                return;
+            }
+
+            const newHomeName = prompt('Enter new name for current home:');
+            if (newHomeName) {
+                const newHomeKey = 'bookmarks-' + newHomeName.replace(/\s+/g, '_').toLowerCase();
+                localStorage.setItem(newHomeKey, localStorage.getItem('bookmarks-' + currentHome));
+                localStorage.removeItem('bookmarks-' + currentHome);
+                currentHome = newHomeKey;
+                bookmarks = loadBookmarks();
+                renderBookmarks();
+                updateCurrentHomeName();
+            }
+        }
+
+        function updateCurrentHomeName() {
+            document.getElementById('currentHomeName').innerText = currentHome;
+        }
+
+        function displayUserHomes() {
+            const userHomes = document.getElementById('userHomes');
+            userHomes.innerHTML = '';
+
+            for (let key in localStorage) {
+                if (key.startsWith('bookmarks-') && key !== 'bookmarks-home1') {
+                    let homeButton = document.createElement('button');
+                    homeButton.innerText = key.replace('bookmarks-', '');
+                    homeButton.onclick = () => switchHome(key.replace('bookmarks-', ''));
+                    userHomes.appendChild(homeButton);
+                }
+            }
+        }
+
+        function switchHome(home) {
+            currentHome = home;
+            bookmarks = loadBookmarks();
+            renderBookmarks();
+            updateCurrentHomeName();
+        }
+
         document.getElementById('addBookmark').onclick = showModal;
+        document.getElementById('importExport').onclick = showImportExportModal;
+        document.getElementById('homeIcon').onclick = toggleHomeOptions;
 
         bookmarks = loadBookmarks();
         renderBookmarks();
+        updateCurrentHomeName();
     </script>
 </body>
 </html>
