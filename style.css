@@ -97,10 +97,10 @@ body {
 .imp-exp {
     position: fixed;
     bottom: 2rem;
-    right: 6rem;
+    right: 12rem;
     background: rgba(255, 255, 255, 0.2);
     border: none;
-    border-radius: 50%;
+    border-radius: 0%;
     width: 30px;
     height: 30px;
     color: var(--text-color);
