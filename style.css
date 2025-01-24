@@ -97,6 +97,7 @@ body {
 .imp-exp {
     position: fixed;
     bottom: 2rem;
+    right: 6rem;
     background: rgba(255, 255, 255, 0.2);
     border: none;
     border-radius: 50%;
